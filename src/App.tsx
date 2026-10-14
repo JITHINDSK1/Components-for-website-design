@@ -1,458 +1,466 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ToastProvider, useToast } from './components/layout/Toast';
-import { Sidebar, NavItem } from './components/layout/Sidebar';
-import { Header } from './components/layout/Header';
-import { HomePage } from './pages/HomePage';
-import { AllSavedPage } from './pages/AllSavedPage';
-import { PromptsPage } from './pages/PromptsPage';
-import { CollectionsPage } from './pages/CollectionsPage';
-import { TagsPage } from './pages/TagsPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { ResourceDetailModal } from './components/library/ResourceDetailModal';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Search,
+  Plus,
+  Menu,
+  X,
+  Bookmark,
+  Layers,
+  Terminal,
+  Globe,
+  Folder,
+  SlidersHorizontal,
+  ChevronRight,
+  ArrowLeft,
+} from 'lucide-react';
+import { Sidebar } from './components/layout/Sidebar';
+import { ResourceCard } from './components/library/ResourceCard';
 import { AddResourceModal } from './components/library/AddResourceModal';
-import { DeleteConfirmModal } from './components/library/DeleteConfirmModal';
-import { CollectionModal } from './components/collections/CollectionModal';
-import { CommandPalette } from './components/search/CommandPalette';
+import { ResourceDetailModal } from './components/library/ResourceDetailModal';
+import { ToastProvider, useToast } from './components/layout/Toast';
 import { storage } from './lib/storage';
-import { Resource, Collection, ResourceType } from './types/resource';
+import { Resource, FilterCategory } from './types/resource';
 
-function VaultApp() {
+function VaultMain() {
   const { toast } = useToast();
 
-  // Primary Data State
+  // Primary Data
   const [resources, setResources] = useState<Resource[]>([]);
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [activeFilter, setActiveFilter] = useState<FilterCategory>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Navigation State
-  const [currentTab, setCurrentTab] = useState<NavItem>('home');
-  const [activeCollectionId, setActiveCollectionId] = useState<string>('all');
-  const [activeTag, setActiveTag] = useState<string>('all');
+  // Mobile/Desktop sidebar drawer toggle (hamburger)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Sidebar Layout State
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-  // Modals State
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  // Modals state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
+
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingResource, setViewingResource] = useState<Resource | null>(null);
 
-  const [collectionModalOpen, setCollectionModalOpen] = useState(false);
-  const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
-
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deletingTarget, setDeletingTarget] = useState<{
-    type: 'resource' | 'collection';
-    item: Resource | Collection;
-  } | null>(null);
-
-  // Reload data from storage
-  const refreshData = useCallback(() => {
-    setResources(storage.getResources());
-    setCollections(storage.getCollections());
+  // Load resources from localStorage
+  const loadResources = useCallback(() => {
+    const data = storage.getResources();
+    setResources(data);
   }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    loadResources();
+  }, [loadResources]);
 
-  // Global Keyboard Shortcuts (Ctrl+K, Cmd+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
+  // Compute counts for navigation badges
+  const counts = useMemo(() => {
+    const res = {
+      all: resources.length,
+      component: 0,
+      prompt: 0,
+      website: 0,
+      other: 0,
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    resources.forEach((r) => {
+      if (r.type === 'component') res.component++;
+      else if (r.type === 'prompt') res.prompt++;
+      else if (r.type === 'website') res.website++;
+      else res.other++;
+    });
+    return res;
+  }, [resources]);
 
-  // CRUD Handler: Save Resource
-  const handleSaveResource = (res: Resource) => {
-    storage.saveResource(res);
-    refreshData();
-    // Update currently viewed resource if open
-    if (viewingResource && viewingResource.id === res.id) {
-      setViewingResource(res);
+  // Filter and live search calculation
+  const searchFilteredResources = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return resources;
+
+    return resources.filter((item) => {
+      const matchTitle = item.title?.toLowerCase().includes(q);
+      const matchSource = item.sourceWebsiteName?.toLowerCase().includes(q);
+      const matchUrl = item.sourceUrl?.toLowerCase().includes(q);
+      const matchPrompt = item.promptText?.toLowerCase().includes(q);
+      const matchDesc = item.description?.toLowerCase().includes(q);
+
+      return matchTitle || matchSource || matchUrl || matchPrompt || matchDesc;
+    });
+  }, [resources, searchQuery]);
+
+  // Specific active category items
+  const categoryResources = useMemo(() => {
+    if (activeFilter === 'all') return searchFilteredResources;
+    return searchFilteredResources.filter((r) => r.type === activeFilter);
+  }, [searchFilteredResources, activeFilter]);
+
+  // Grouped items by category for "All saves" view
+  const groupedResources = useMemo(() => {
+    const groups: {
+      category: FilterCategory;
+      title: string;
+      icon: any;
+      items: Resource[];
+    }[] = [
+      {
+        category: 'component',
+        title: 'Components',
+        icon: Layers,
+        items: searchFilteredResources.filter((r) => r.type === 'component'),
+      },
+      {
+        category: 'prompt',
+        title: 'Prompts',
+        icon: Terminal,
+        items: searchFilteredResources.filter((r) => r.type === 'prompt'),
+      },
+      {
+        category: 'website',
+        title: 'Websites',
+        icon: Globe,
+        items: searchFilteredResources.filter((r) => r.type === 'website'),
+      },
+      {
+        category: 'other',
+        title: 'Other',
+        icon: Folder,
+        items: searchFilteredResources.filter((r) => r.type === 'other'),
+      },
+    ];
+
+    // Only return groups that have items or all if none
+    return groups.filter((g) => g.items.length > 0);
+  }, [searchFilteredResources]);
+
+  // Handle Save (Add or Edit)
+  const handleSaveResource = (payload: Partial<Resource> & { id?: string }) => {
+    const saved = storage.saveResource(payload);
+    loadResources();
+
+    if (viewingResource && viewingResource.id === saved.id) {
+      setViewingResource(saved);
     }
   };
 
-  // CRUD Handler: Delete Resource Request
-  const handleRequestDeleteResource = (res: Resource) => {
-    setDeletingTarget({ type: 'resource', item: res });
-    setDeleteConfirmOpen(true);
-  };
-
-  // CRUD Handler: Toggle Favorite
-  const handleToggleFavorite = (id: string) => {
-    const isFav = storage.toggleFavorite(id);
-    refreshData();
-    if (viewingResource && viewingResource.id === id) {
-      setViewingResource((prev) => (prev ? { ...prev, isFavorite: isFav } : null));
-    }
-    toast(isFav ? 'Added to favorites' : 'Removed from favorites', 'info');
-  };
-
-  // CRUD Handler: Mark Prompt as Used
-  const handleMarkAsUsed = (id: string) => {
-    storage.incrementUsage(id);
-    refreshData();
-    if (viewingResource && viewingResource.id === id) {
-      setViewingResource((prev) =>
-        prev
-          ? {
-              ...prev,
-              usageCount: (prev.usageCount || 0) + 1,
-              lastOpenedAt: new Date().toISOString(),
-            }
-          : null
-      );
-    }
-  };
-
-  // CRUD Handler: Update Notes
-  const handleUpdateNotes = (id: string, notes: string) => {
-    storage.updateNotes(id, notes);
-    refreshData();
-    if (viewingResource && viewingResource.id === id) {
-      setViewingResource((prev) => (prev ? { ...prev, notes } : null));
-    }
-  };
-
-  // CRUD Handler: Save Collection
-  const handleSaveCollection = (col: Collection) => {
-    storage.saveCollection(col);
-    refreshData();
-  };
-
-  // CRUD Handler: Delete Collection Request
-  const handleRequestDeleteCollection = (col: Collection) => {
-    setDeletingTarget({ type: 'collection', item: col });
-    setDeleteConfirmOpen(true);
-  };
-
-  // Confirmation Delete Execution
-  const handleConfirmDelete = () => {
-    if (!deletingTarget) return;
-
-    if (deletingTarget.type === 'resource') {
-      const targetRes = deletingTarget.item as Resource;
-      storage.deleteResource(targetRes.id);
-      refreshData();
-      if (viewingResource?.id === targetRes.id) {
-        setDetailModalOpen(false);
+  // Handle Delete
+  const handleDeleteResource = (resource: Resource) => {
+    if (window.confirm(`Delete "${resource.title}" from library?`)) {
+      storage.deleteResource(resource.id);
+      loadResources();
+      if (viewingResource?.id === resource.id) {
+        setIsDetailModalOpen(false);
+        setViewingResource(null);
       }
-      toast(`Deleted resource: "${targetRes.title}"`, 'info');
-    } else {
-      const targetCol = deletingTarget.item as Collection;
-      storage.deleteCollection(targetCol.id);
-      refreshData();
-      if (activeCollectionId === targetCol.id) {
-        setActiveCollectionId('all');
-      }
-      toast(`Deleted collection: "${targetCol.name}"`, 'info');
-    }
-
-    setDeleteConfirmOpen(false);
-    setDeletingTarget(null);
-  };
-
-  // Open Details Modal with usage increment
-  const handleOpenDetails = (res: Resource) => {
-    setViewingResource(res);
-    setDetailModalOpen(true);
-  };
-
-  // Open Edit Modal
-  const handleEditResource = (res: Resource) => {
-    setEditingResource(res);
-    setAddModalOpen(true);
-  };
-
-  // Select collection from any page
-  const handleSelectCollection = (colId: string) => {
-    setActiveCollectionId(colId);
-    setCurrentTab('collections');
-  };
-
-  // Select tag from any page
-  const handleSelectTag = (tag: string) => {
-    setActiveTag(tag);
-    setCurrentTab('tags');
-  };
-
-  const availableTags = storage.getAllTags();
-
-  const stats = {
-    total: resources.length,
-    favorites: resources.filter((r) => r.isFavorite).length,
-    prompts: resources.filter((r) => r.type === 'prompt' || Boolean(r.promptText)).length,
-  };
-
-  // Render Current Page
-  const renderPage = () => {
-    switch (currentTab) {
-      case 'home':
-        return (
-          <HomePage
-            resources={resources}
-            collections={collections}
-            onOpenDetails={handleOpenDetails}
-            onEditResource={handleEditResource}
-            onDeleteResource={handleRequestDeleteResource}
-            onToggleFavorite={handleToggleFavorite}
-            onOpenAddModal={() => {
-              setEditingResource(null);
-              setAddModalOpen(true);
-            }}
-            onOpenSearch={() => setCommandPaletteOpen(true)}
-            onNavigate={setCurrentTab}
-            onSelectCollection={handleSelectCollection}
-            onSelectTag={handleSelectTag}
-            onResetDemo={() => {
-              storage.resetDemoData();
-              refreshData();
-              toast('Restored demo resources', 'success');
-            }}
-          />
-        );
-
-      case 'all-saved':
-      case 'components':
-      case 'websites':
-      case 'templates':
-      case 'animations':
-      case 'screenshots':
-      case 'favorites':
-      case 'recent': {
-        const typeFilterMap: Record<string, ResourceType | 'all'> = {
-          components: 'component',
-          websites: 'website',
-          templates: 'template',
-          animations: 'animation',
-          screenshots: 'screenshot',
-        };
-
-        const initialType = typeFilterMap[currentTab] || 'all';
-        const initialFavorites = currentTab === 'favorites';
-
-        return (
-          <AllSavedPage
-            key={currentTab}
-            resources={resources}
-            collections={collections}
-            availableTags={availableTags}
-            initialTypeFilter={initialType}
-            initialFavoritesOnly={initialFavorites}
-            onOpenDetails={handleOpenDetails}
-            onEditResource={handleEditResource}
-            onDeleteResource={handleRequestDeleteResource}
-            onToggleFavorite={handleToggleFavorite}
-            onOpenAddModal={() => {
-              setEditingResource(null);
-              setAddModalOpen(true);
-            }}
-            onSelectTag={handleSelectTag}
-            onSelectCollection={handleSelectCollection}
-          />
-        );
-      }
-
-      case 'prompts':
-        return (
-          <PromptsPage
-            resources={resources}
-            collections={collections}
-            onOpenDetails={handleOpenDetails}
-            onEditResource={handleEditResource}
-            onDeleteResource={handleRequestDeleteResource}
-            onToggleFavorite={handleToggleFavorite}
-            onMarkAsUsed={handleMarkAsUsed}
-            onOpenAddModal={() => {
-              setEditingResource(null);
-              setAddModalOpen(true);
-            }}
-          />
-        );
-
-      case 'collections':
-        return (
-          <CollectionsPage
-            collections={collections}
-            resources={resources}
-            activeCollectionId={activeCollectionId}
-            onSelectCollection={setActiveCollectionId}
-            onOpenCreateModal={() => {
-              setEditingCollection(null);
-              setCollectionModalOpen(true);
-            }}
-            onEditCollection={(col) => {
-              setEditingCollection(col);
-              setCollectionModalOpen(true);
-            }}
-            onDeleteCollection={handleRequestDeleteCollection}
-            onOpenDetails={handleOpenDetails}
-            onEditResource={handleEditResource}
-            onDeleteResource={handleRequestDeleteResource}
-            onToggleFavorite={handleToggleFavorite}
-            onSelectTag={handleSelectTag}
-          />
-        );
-
-      case 'tags':
-        return (
-          <TagsPage
-            resources={resources}
-            collections={collections}
-            availableTags={availableTags}
-            activeTag={activeTag}
-            onSelectTag={setActiveTag}
-            onOpenDetails={handleOpenDetails}
-            onEditResource={handleEditResource}
-            onDeleteResource={handleRequestDeleteResource}
-            onToggleFavorite={handleToggleFavorite}
-            onSelectCollection={handleSelectCollection}
-          />
-        );
-
-      case 'settings':
-        return <SettingsPage onDataChanged={refreshData} />;
-
-      default:
-        return null;
+      toast(`Deleted "${resource.title}"`, 'info');
     }
   };
+
+  // Handle Edit trigger
+  const handleEditResource = (resource: Resource) => {
+    setEditingResource(resource);
+    setIsAddModalOpen(true);
+  };
+
+  // Handle Open Details
+  const handleOpenDetails = (resource: Resource) => {
+    setViewingResource(resource);
+    setIsDetailModalOpen(true);
+  };
+
+  // Reset Demo
+  const handleResetDemo = () => {
+    storage.resetDemoData();
+    loadResources();
+    toast('Demo library restored', 'info');
+  };
+
+  // Clear All
+  const handleClearAll = () => {
+    storage.clearLibrary();
+    loadResources();
+    toast('Library cleared', 'info');
+  };
+
+  const filterTabs: { id: FilterCategory; label: string }[] = [
+    { id: 'all', label: 'All saves' },
+    { id: 'component', label: 'Components' },
+    { id: 'prompt', label: 'Prompts' },
+    { id: 'website', label: 'Websites' },
+    { id: 'other', label: 'Other' },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#0D0D0F] text-[#EDEDEF] flex">
-      {/* Persistent Left Sidebar */}
+    <div className="min-h-screen bg-[#0A0A0C] text-[#EDEDEF] flex flex-col antialiased">
+      {/* Sidebar Drawer (Opened via hamburger menu) */}
       <Sidebar
-        currentTab={currentTab}
-        onNavigate={(tab) => {
-          if (tab === 'collections') setActiveCollectionId('all');
-          if (tab === 'tags') setActiveTag('all');
-          setCurrentTab(tab);
+        activeFilter={activeFilter}
+        onSelectFilter={(f) => {
+          setActiveFilter(f);
+          setIsSidebarOpen(false);
         }}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onOpenSearch={() => setCommandPaletteOpen(true)}
         onOpenAddModal={() => {
           setEditingResource(null);
-          setAddModalOpen(true);
+          setIsAddModalOpen(true);
+          setIsSidebarOpen(false);
         }}
-        stats={stats}
-        isMobileOpen={isMobileSidebarOpen}
-        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        counts={counts}
+        onResetDemo={handleResetDemo}
+        onClearAll={handleClearAll}
+        isMobileOpen={isSidebarOpen}
+        onCloseMobile={() => setIsSidebarOpen(false)}
       />
 
-      {/* Main Content Area */}
-      <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
-          isSidebarCollapsed ? 'lg:pl-18' : 'lg:pl-64'
-        }`}
-      >
-        <Header
-          currentTab={currentTab}
-          onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
-          onOpenSearch={() => setCommandPaletteOpen(true)}
-          onOpenAddModal={() => {
-            setEditingResource(null);
-            setAddModalOpen(true);
-          }}
-          itemCount={currentTab === 'all-saved' ? resources.length : undefined}
-        />
+      {/* Top Navbar Matching Screenshot */}
+      <nav className="h-14 px-4 sm:px-8 border-b border-[#1A1A1E] bg-[#0A0A0C]/90 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between gap-4">
+        {/* Left: Hamburger Icon & Title */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors"
+            title="Toggle Sidebar Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
 
-        <main className="flex-1 px-4 sm:px-8 py-6 max-w-7xl w-full mx-auto">
-          {renderPage()}
-        </main>
-      </div>
+        {/* Center: "Bookmarks" Title */}
+        <div className="text-xs sm:text-sm font-medium text-zinc-300 tracking-wide select-none">
+          Bookmarks
+        </div>
 
-      {/* Global Modals */}
-      <CommandPalette
-        isOpen={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        resources={resources}
-        collections={collections}
-        onSelectResource={(res) => {
-          handleOpenDetails(res);
-        }}
-        onSelectCollection={(colId) => {
-          handleSelectCollection(colId);
-        }}
-      />
+        {/* Right: Search + Electric Blue Add Button */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Search Box */}
+          <div className="relative w-36 sm:w-64">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-zinc-500">
+              <Search className="w-3.5 h-3.5" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search library..."
+              className="w-full bg-[#141417] border border-[#202024] focus:border-blue-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-2 flex items-center text-zinc-500 hover:text-white"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
+          {/* Electric Blue "+ Add to Library" Button (inspired by screenshot "+ New list") */}
+          <button
+            onClick={() => {
+              setEditingResource(null);
+              setIsAddModalOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-lg bg-[#1853DB] hover:bg-[#1D5BF0] text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Add to Library</span>
+            <span className="sm:hidden">Add</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* Main Single-Page Content Area */}
+      <main className="flex-1 px-4 sm:px-8 py-6 max-w-[1680px] w-full mx-auto">
+        {/* Main Page Header */}
+        <div className="mb-6">
+          <div className="flex items-baseline justify-between mb-1">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              {activeFilter === 'all'
+                ? 'Bookmarks'
+                : activeFilter === 'component'
+                ? 'Components'
+                : activeFilter === 'prompt'
+                ? 'Prompts'
+                : activeFilter === 'website'
+                ? 'Websites'
+                : 'Other Resources'}
+            </h1>
+          </div>
+          <p className="text-xs text-zinc-400">
+            {resources.length} saves · personal library
+          </p>
+
+          {/* Capsule Filter Pills Matching Screenshot */}
+          <div className="mt-4 inline-flex items-center p-1 rounded-xl bg-[#141417] border border-[#202024] gap-1">
+            {filterTabs.map((tab) => {
+              const isActive = activeFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveFilter(tab.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-[#242429] text-white shadow-sm font-semibold'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Content Rows & Cards */}
+        {searchQuery ? (
+          /* Search Results Mode */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-xs text-zinc-400 pb-2 border-b border-[#1A1A1E]">
+              <span>Search results for "{searchQuery}" ({searchFilteredResources.length})</span>
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-blue-400 hover:underline"
+              >
+                Clear search
+              </button>
+            </div>
+
+            {searchFilteredResources.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+                {searchFilteredResources.map((item) => (
+                  <ResourceCard
+                    key={item.id}
+                    resource={item}
+                    onOpenDetails={handleOpenDetails}
+                    onEdit={handleEditResource}
+                    onDelete={handleDeleteResource}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-xs text-zinc-500 border border-dashed border-[#202024] rounded-xl">
+                No visual bookmarks found matching "{searchQuery}".
+              </div>
+            )}
+          </div>
+        ) : activeFilter !== 'all' ? (
+          /* Single Category Filter Grid */
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#1A1A1E]">
+              <button
+                onClick={() => setActiveFilter('all')}
+                className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to All saves</span>
+              </button>
+              <span className="text-xs text-zinc-500 font-mono">
+                {categoryResources.length} items
+              </span>
+            </div>
+
+            {categoryResources.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+                {categoryResources.map((item) => (
+                  <ResourceCard
+                    key={item.id}
+                    resource={item}
+                    onOpenDetails={handleOpenDetails}
+                    onEdit={handleEditResource}
+                    onDelete={handleDeleteResource}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-xs text-zinc-500 border border-dashed border-[#202024] rounded-xl">
+                No items in this category yet.
+              </div>
+            )}
+          </div>
+        ) : (
+          /* "All saves" Grouped Horizontal Rows View (Exact Screenshot Style!) */
+          <div className="space-y-10">
+            {groupedResources.length > 0 ? (
+              groupedResources.map((group) => (
+                <section key={group.category} className="space-y-3">
+                  {/* Section Title Header with subtle count and "View all" */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-semibold text-white tracking-tight">
+                        {group.title}
+                      </h2>
+                      <span className="text-xs text-zinc-500 font-mono">
+                        {group.items.length}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveFilter(group.category)}
+                      className="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-0.5"
+                    >
+                      <span>View all</span>
+                      <ChevronRight className="w-3 h-3 text-zinc-500" />
+                    </button>
+                  </div>
+
+                  {/* Horizontal Visual Cards Grid/Row */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+                    {group.items.slice(0, 5).map((item) => (
+                      <ResourceCard
+                        key={item.id}
+                        resource={item}
+                        onOpenDetails={handleOpenDetails}
+                        onEdit={handleEditResource}
+                        onDelete={handleDeleteResource}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            ) : (
+              /* Completely Empty Library */
+              <div className="flex flex-col items-center justify-center p-16 text-center rounded-2xl bg-[#111114] border border-dashed border-[#202024] max-w-md mx-auto mt-8">
+                <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mb-3">
+                  <SlidersHorizontal className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-semibold text-white mb-1">Your library is empty</h3>
+                <p className="text-xs text-zinc-400 mb-5 max-w-xs">
+                  Save your first component reference, UI screenshot, or AI prompt.
+                </p>
+                <button
+                  onClick={() => {
+                    setEditingResource(null);
+                    setIsAddModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#1853DB] hover:bg-[#1D5BF0] text-white shadow-sm shadow-blue-500/25 flex items-center gap-1.5 transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add First Resource</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Add / Edit Resource Modal */}
       <AddResourceModal
-        isOpen={addModalOpen}
+        isOpen={isAddModalOpen}
         onClose={() => {
-          setAddModalOpen(false);
+          setIsAddModalOpen(false);
           setEditingResource(null);
         }}
         onSave={handleSaveResource}
-        collections={collections}
         initialData={editingResource}
       />
 
+      {/* Resource Detail Modal */}
       <ResourceDetailModal
-        isOpen={detailModalOpen}
+        isOpen={isDetailModalOpen}
         resource={viewingResource}
-        allResources={resources}
-        collections={collections}
         onClose={() => {
-          setDetailModalOpen(false);
+          setIsDetailModalOpen(false);
           setViewingResource(null);
         }}
         onEdit={(res) => {
-          setDetailModalOpen(false);
+          setIsDetailModalOpen(false);
           handleEditResource(res);
         }}
-        onDelete={(res) => {
-          handleRequestDeleteResource(res);
-        }}
-        onToggleFavorite={handleToggleFavorite}
-        onMarkAsUsed={handleMarkAsUsed}
-        onUpdateNotes={handleUpdateNotes}
-        onOpenResource={(res) => {
-          setViewingResource(res);
-        }}
-      />
-
-      <CollectionModal
-        isOpen={collectionModalOpen}
-        onClose={() => {
-          setCollectionModalOpen(false);
-          setEditingCollection(null);
-        }}
-        onSave={handleSaveCollection}
-        initialData={editingCollection}
-      />
-
-      <DeleteConfirmModal
-        isOpen={deleteConfirmOpen}
-        title={
-          deletingTarget?.type === 'resource'
-            ? 'Delete Resource'
-            : 'Delete Collection'
-        }
-        itemName={
-          deletingTarget
-            ? deletingTarget.type === 'resource'
-              ? (deletingTarget.item as Resource).title
-              : (deletingTarget.item as Collection).name
-            : ''
-        }
-        message={
-          deletingTarget?.type === 'collection'
-            ? 'Deleting this collection will NOT remove your saved resources. It will only remove the collection label.'
-            : undefined
-        }
-        onConfirm={handleConfirmDelete}
-        onCancel={() => {
-          setDeleteConfirmOpen(false);
-          setDeletingTarget(null);
-        }}
+        onDelete={handleDeleteResource}
       />
     </div>
   );
@@ -461,7 +469,7 @@ function VaultApp() {
 export default function App() {
   return (
     <ToastProvider>
-      <VaultApp />
+      <VaultMain />
     </ToastProvider>
   );
 }

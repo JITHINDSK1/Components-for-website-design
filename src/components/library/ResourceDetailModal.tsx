@@ -1,68 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import {
   X,
-  Star,
   ExternalLink,
   Copy,
   Check,
   Edit2,
   Trash2,
   Terminal,
-  Layers,
   Globe,
-  PanelsTopLeft,
-  Activity,
-  Image as ImageIcon,
+  Layers,
   Folder,
-  Calendar,
-  Clock,
-  Sparkles,
-  Save,
-  CheckCircle,
 } from 'lucide-react';
-import { Resource, Collection } from '../../types/resource';
-import { copyToClipboard, formatCopyWithContext } from '../../lib/clipboard';
+import { Resource } from '../../types/resource';
+import { ResourceImage } from '../common/ResourceImage';
+import { copyToClipboard } from '../../lib/clipboard';
 import { useToast } from '../layout/Toast';
 
 interface ResourceDetailModalProps {
-  resource: Resource | null;
-  allResources: Resource[];
-  collections: Collection[];
   isOpen: boolean;
+  resource: Resource | null;
   onClose: () => void;
   onEdit: (resource: Resource) => void;
   onDelete: (resource: Resource) => void;
-  onToggleFavorite: (id: string) => void;
-  onMarkAsUsed: (id: string) => void;
-  onUpdateNotes: (id: string, notes: string) => void;
-  onOpenResource: (resource: Resource) => void;
 }
 
 export const ResourceDetailModal: React.FC<ResourceDetailModalProps> = ({
-  resource,
-  allResources,
-  collections,
   isOpen,
+  resource,
   onClose,
   onEdit,
   onDelete,
-  onToggleFavorite,
-  onMarkAsUsed,
-  onUpdateNotes,
-  onOpenResource,
 }) => {
   const { toast } = useToast();
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
-  const [copiedContext, setCopiedContext] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
-
-  useEffect(() => {
-    if (resource) {
-      setNotes(resource.notes || '');
-      setIsEditingNotes(false);
-    }
-  }, [resource]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -80,389 +50,182 @@ export const ResourceDetailModal: React.FC<ResourceDetailModalProps> = ({
     if (!resource.promptText) return;
     const ok = await copyToClipboard(resource.promptText, true);
     if (ok) {
-      setCopiedPrompt(true);
-      onMarkAsUsed(resource.id);
+      setCopied(true);
       toast('Prompt copied to clipboard!', 'success');
-      setTimeout(() => setCopiedPrompt(false), 2000);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleCopyWithContext = async () => {
-    if (!resource.promptText) return;
-    const formatted = formatCopyWithContext(
-      resource.title,
-      resource.sourceUrl,
-      resource.promptText
-    );
-    const ok = await copyToClipboard(formatted, true);
-    if (ok) {
-      setCopiedContext(true);
-      onMarkAsUsed(resource.id);
-      toast('Prompt copied with context headers!', 'success');
-      setTimeout(() => setCopiedContext(false), 2000);
+  const getTypeBadge = () => {
+    switch (resource.type) {
+      case 'component':
+        return { label: 'Component', icon: Layers, pill: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+      case 'prompt':
+        return { label: 'Prompt', icon: Terminal, pill: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+      case 'website':
+        return { label: 'Website', icon: Globe, pill: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
+      default:
+        return { label: 'Other', icon: Folder, pill: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
     }
   };
 
-  const handleSaveNotes = () => {
-    onUpdateNotes(resource.id, notes);
-    setIsEditingNotes(false);
-    toast('Personal notes updated', 'info');
-  };
-
-  const resourceCollections = collections.filter((c) =>
-    resource.collectionIds?.includes(c.id)
-  );
-
-  // Find related resources by matching tags or same type
-  const relatedResources = allResources
-    .filter(
-      (r) =>
-        r.id !== resource.id &&
-        (r.type === resource.type ||
-          r.tags?.some((t) => resource.tags?.includes(t)))
-    )
-    .slice(0, 3);
-
-  const formattedCreated = new Date(resource.createdAt).toLocaleDateString(
-    'en-US',
-    { month: 'short', day: 'numeric', year: 'numeric' }
-  );
+  const badge = getTypeBadge();
+  const BadgeIcon = badge.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-      {/* Backdrop */}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
       <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-md"
-        onClick={onClose}
-      />
+        className="w-full max-w-2xl bg-[#121215] border border-[#26262B] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Full Image Banner (if available) */}
+        {resource.previewImageUrl && (
+          <div className="relative w-full max-h-72 bg-[#0C0C0E] border-b border-[#242428] overflow-hidden flex items-center justify-center">
+            <ResourceImage
+              src={resource.previewImageUrl}
+              alt={resource.title}
+              type={resource.type}
+              aspectClass="max-h-72 w-full object-contain"
+            />
+          </div>
+        )}
 
-      {/* Modal Dialog */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#121215] border border-[#27272A] rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-150">
-        {/* Top Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#242428] bg-[#16161A] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xs uppercase font-mono tracking-wider px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60">
-              {resource.type}
-            </span>
-            {resource.sourceWebsiteName && (
-              <span className="text-xs text-zinc-400 font-mono">
-                from <span className="text-zinc-200">{resource.sourceWebsiteName}</span>
+        {/* Modal Header */}
+        <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-4">
+          <div className="space-y-1.5 flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium border ${badge.pill}`}>
+                <BadgeIcon className="w-3.5 h-3.5" />
+                {badge.label}
               </span>
+
+              {resource.sourceWebsiteName && (
+                <span className="text-xs font-mono text-zinc-400 px-2 py-0.5 rounded bg-zinc-800/80 border border-zinc-700/50">
+                  {resource.sourceWebsiteName}
+                </span>
+              )}
+            </div>
+
+            <h2 className="text-lg font-bold text-white leading-snug">
+              {resource.title}
+            </h2>
+
+            {resource.description && (
+              <p className="text-xs text-zinc-400 leading-relaxed pt-1">
+                {resource.description}
+              </p>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onToggleFavorite(resource.id)}
-              className={`p-2 rounded-lg border transition-colors ${
-                resource.isFavorite
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
-              }`}
-              title={resource.isFavorite ? 'Starred' : 'Add to favorites'}
-            >
-              <Star className={`w-4 h-4 ${resource.isFavorite ? 'fill-current' : ''}`} />
-            </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
+        {/* Modal Content: Prompt & Metadata */}
+        <div className="px-6 py-3 overflow-y-auto flex-1 space-y-4">
+          {/* Complete prompt if available */}
+          {resource.promptText ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
+                  <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Saved Prompt</span>
+                </span>
+                <button
+                  onClick={handleCopyPrompt}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    copied
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/30'
+                  }`}
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied to Clipboard!' : 'Copy Prompt'}</span>
+                </button>
+              </div>
+
+              <div className="p-4 rounded-xl bg-[#0B0B0E] border border-[#232328] font-mono text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap select-text max-h-60 overflow-y-auto">
+                {resource.promptText}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Source Link Information */}
+          {resource.sourceUrl && (
+            <div className="p-3 rounded-xl bg-[#16161A] border border-[#26262B] flex items-center justify-between gap-3 text-xs">
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] text-zinc-500 block">Original Source</span>
+                <a
+                  href={resource.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 truncate block underline-offset-2 hover:underline"
+                >
+                  {resource.sourceUrl}
+                </a>
+              </div>
+              <a
+                href={resource.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Visit Site</span>
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="px-6 py-4 border-t border-[#222226] bg-[#101012] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 onClose();
                 onEdit(resource);
               }}
-              className="p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors"
-              title="Edit resource"
+              className="px-3 py-2 rounded-xl text-xs font-medium bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/50 flex items-center gap-1.5 transition-colors"
             >
-              <Edit2 className="w-4 h-4" />
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Edit</span>
             </button>
-
             <button
               onClick={() => {
-                onClose();
                 onDelete(resource);
+                onClose();
               }}
-              className="p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-rose-400 hover:border-rose-800 transition-colors"
-              title="Delete resource"
+              className="px-3 py-2 rounded-xl text-xs font-medium text-rose-400 hover:bg-rose-950/30 border border-rose-900/30 flex items-center gap-1.5 transition-colors"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
             </button>
+          </div>
 
-            <div className="w-px h-6 bg-zinc-800 mx-1" />
-
+          <div className="flex items-center gap-2">
+            {resource.promptText && (
+              <button
+                onClick={handleCopyPrompt}
+                className="px-4 py-2 rounded-xl text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/25 flex items-center gap-1.5 transition-all"
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied' : 'Copy Prompt'}</span>
+              </button>
+            )}
             <button
               onClick={onClose}
-              className="p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white transition-colors"
-              title="Close (Esc)"
+              className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
             >
-              <X className="w-4 h-4" />
+              Close
             </button>
           </div>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Title & Description */}
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight mb-2">
-              {resource.title}
-            </h2>
-            <p className="text-sm text-zinc-300 leading-relaxed">
-              {resource.description || 'No description provided.'}
-            </p>
-          </div>
-
-          {/* Large Preview Media (If Image exists) */}
-          {resource.previewImageUrl && (
-            <div className="relative rounded-xl overflow-hidden border border-[#27272A] bg-zinc-950 max-h-80 flex items-center justify-center">
-              <img
-                src={resource.previewImageUrl}
-                alt={resource.title}
-                className="w-full h-full object-cover max-h-80"
-              />
-              {resource.sourceUrl && (
-                <a
-                  href={resource.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/80 hover:bg-black backdrop-blur-md border border-zinc-700 text-xs text-white font-medium shadow-lg transition-all"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Visit original website
-                </a>
-              )}
-            </div>
-          )}
-
-          {/* If prompt exists: High-precision Prompt Box & Action Bar */}
-          {resource.promptText && (
-            <div className="rounded-xl border border-[#27272A] bg-[#0E0E11] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 bg-[#151518] border-b border-[#242428]">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-semibold text-zinc-200">
-                    Reusable Prompt Spec
-                  </span>
-                  <span className="text-[11px] text-zinc-500 font-mono">
-                    ({resource.promptText.trim().split(/\s+/).length} words)
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCopyWithContext}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
-                    title="Copy prompt with origin comments"
-                  >
-                    {copiedContext ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    )}
-                    <span>Copy with Context</span>
-                  </button>
-
-                  <button
-                    onClick={handleCopyPrompt}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-md shadow-blue-950/40 transition-colors"
-                    title="Copy raw prompt"
-                  >
-                    {copiedPrompt ? (
-                      <Check className="w-3.5 h-3.5 text-white" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                    <span>Copy Prompt</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Prompt Text Monospace Area */}
-              <div className="p-4 overflow-x-auto max-h-72">
-                <pre className="font-mono text-xs text-zinc-200 whitespace-pre-wrap leading-relaxed select-text">
-                  {resource.promptText}
-                </pre>
-              </div>
-
-              {/* Prompt Usage Footer */}
-              <div className="px-4 py-2.5 bg-[#121215] border-t border-[#242428] flex items-center justify-between text-xs text-zinc-400">
-                <div className="flex items-center gap-3">
-                  <span>
-                    Used <strong className="text-zinc-200">{resource.usageCount || 0}</strong> times
-                  </span>
-                  {resource.lastOpenedAt && (
-                    <span>
-                      • Last used {new Date(resource.lastOpenedAt).toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => {
-                    onMarkAsUsed(resource.id);
-                    toast('Marked prompt as used', 'info');
-                  }}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
-                >
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  Mark as used
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Source Link if not shown on image */}
-          {resource.sourceUrl && !resource.previewImageUrl && (
-            <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#151518] border border-[#242428]">
-              <div className="flex items-center gap-2 text-xs text-zinc-300 truncate">
-                <Globe className="w-4 h-4 text-zinc-400 shrink-0" />
-                <span className="text-zinc-500">Source:</span>
-                <span className="font-mono truncate">{resource.sourceUrl}</span>
-              </div>
-              <a
-                href={resource.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 transition-colors shrink-0"
-              >
-                <span>Visit site</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
-          )}
-
-          {/* Tags and Collections */}
-          <div className="space-y-3">
-            {/* Collections */}
-            {resourceCollections.length > 0 && (
-              <div>
-                <span className="text-xs text-zinc-500 uppercase tracking-wider font-mono block mb-1.5">
-                  Collections
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {resourceCollections.map((col) => (
-                    <span
-                      key={col.id}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-zinc-700/60 text-xs text-zinc-200 font-medium"
-                    >
-                      <Folder className="w-3.5 h-3.5 text-blue-400" />
-                      {col.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tags */}
-            {resource.tags && resource.tags.length > 0 && (
-              <div>
-                <span className="text-xs text-zinc-500 uppercase tracking-wider font-mono block mb-1.5">
-                  Tags
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {resource.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="text-xs px-2.5 py-0.5 rounded-full bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono"
-                    >
-                      #{t}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Personal Notes (Editable Section) */}
-          <div className="rounded-xl border border-[#242428] bg-[#151518] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">
-                Personal Notes & Implementation Tips
-              </span>
-              {!isEditingNotes ? (
-                <button
-                  onClick={() => setIsEditingNotes(true)}
-                  className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                >
-                  <Edit2 className="w-3 h-3" />
-                  Edit notes
-                </button>
-              ) : (
-                <button
-                  onClick={handleSaveNotes}
-                  className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                >
-                  <Save className="w-3 h-3" />
-                  Save
-                </button>
-              )}
-            </div>
-
-            {isEditingNotes ? (
-              <div className="space-y-2">
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add your notes, implementation quirks, keyboard shortcuts, or project ideas here..."
-                  className="w-full h-24 p-2.5 rounded-lg bg-[#0E0E11] border border-zinc-700 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 leading-relaxed font-sans resize-y"
-                />
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setNotes(resource.notes || '');
-                      setIsEditingNotes(false);
-                    }}
-                    className="px-2.5 py-1 rounded text-xs text-zinc-400 hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveNotes}
-                    className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-xs text-white"
-                  >
-                    Save Notes
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-zinc-400 leading-relaxed italic">
-                {notes ? notes : 'No personal notes added yet. Click edit to add implementation details.'}
-              </p>
-            )}
-          </div>
-
-          {/* Metadata Footer */}
-          <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500 pt-3 border-t border-[#242428] font-mono">
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              Saved {formattedCreated}
-            </span>
-            <span>•</span>
-            <span>ID: {resource.id}</span>
-          </div>
-
-          {/* Related Saved Resources */}
-          {relatedResources.length > 0 && (
-            <div className="pt-4 border-t border-[#242428]">
-              <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono mb-3">
-                Related in Your Vault
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {relatedResources.map((rel) => (
-                  <div
-                    key={rel.id}
-                    onClick={() => onOpenResource(rel)}
-                    className="p-3 rounded-xl bg-[#16161A] border border-[#242428] hover:border-zinc-600 transition-all cursor-pointer group"
-                  >
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase block mb-1">
-                      {rel.type}
-                    </span>
-                    <h5 className="text-xs font-semibold text-zinc-200 group-hover:text-blue-400 truncate">
-                      {rel.title}
-                    </h5>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
