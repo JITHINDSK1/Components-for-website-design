@@ -3,8 +3,8 @@ import {
   Search,
   Plus,
   X,
-  RotateCcw,
   Trash2,
+  FolderOpen,
 } from 'lucide-react';
 import { ResourceCard } from './components/library/ResourceCard';
 import { AddResourceModal } from './components/library/AddResourceModal';
@@ -57,7 +57,7 @@ function VaultMain() {
   const handleSaveResource = (payload: Partial<Resource> & { id?: string }) => {
     const saved = storage.saveResource({
       ...payload,
-      type: 'component', // Default type is component
+      type: 'component',
     });
     loadResources();
 
@@ -91,27 +91,19 @@ function VaultMain() {
     setIsDetailModalOpen(true);
   };
 
-  // Reset Demo Data
-  const handleResetDemo = () => {
-    if (window.confirm('Reset to initial sample components?')) {
-      storage.resetDemoData();
-      loadResources();
-      toast('Sample components restored', 'info');
-    }
-  };
-
   // Clear All
   const handleClearAll = () => {
-    if (window.confirm('Delete all saved components from your private library?')) {
+    if (resources.length === 0) return;
+    if (window.confirm('Delete all saved components from your library?')) {
       storage.clearLibrary();
       loadResources();
-      toast('All saved components cleared', 'info');
+      toast('All saved components deleted', 'info');
     }
   };
 
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-[#EDEDEF] flex flex-col antialiased selection:bg-blue-600 selection:text-white">
-      {/* Top Minimalist Header */}
+      {/* Top Header */}
       <header className="h-16 px-6 sm:px-12 border-b border-[#18181C] bg-[#0A0A0C]/90 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between gap-4">
         {/* Brand */}
         <div className="flex items-center gap-2.5">
@@ -132,7 +124,7 @@ function VaultMain() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search components or prompts..."
+              placeholder="Search your components..."
               className="w-full bg-[#131316] border border-[#202024] focus:border-[#1853DB] rounded-lg pl-9 pr-7 py-1.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none transition-colors"
             />
             {searchQuery && (
@@ -162,38 +154,29 @@ function VaultMain() {
 
       {/* Main Single Page */}
       <main className="flex-1 px-6 sm:px-12 py-8 max-w-[1720px] w-full mx-auto">
-        {/* Section Header Matching Screenshot Style */}
+        {/* Section Header */}
         <div className="flex items-end justify-between mb-8">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              {searchQuery ? 'Search Results' : 'Top Components'}
+              {searchQuery ? 'Search Results' : 'Saved Components'}
             </h1>
             <p className="text-xs sm:text-sm text-zinc-400 mt-1">
               {searchQuery
                 ? `Showing ${filteredResources.length} result${filteredResources.length === 1 ? '' : 's'} matching "${searchQuery}"`
-                : `${resources.length} saved component${resources.length === 1 ? '' : 's'} · private local library`}
+                : `${resources.length} saved component${resources.length === 1 ? '' : 's'}`}
             </p>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-zinc-500">
-            <button
-              onClick={handleResetDemo}
-              className="hover:text-zinc-300 flex items-center gap-1 transition-colors"
-              title="Reset sample components"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span className="hidden sm:inline">Reset Samples</span>
-            </button>
-            <span className="text-zinc-700 hidden sm:inline">·</span>
+          {resources.length > 0 && (
             <button
               onClick={handleClearAll}
-              className="hover:text-rose-400 flex items-center gap-1 transition-colors"
+              className="text-xs text-zinc-500 hover:text-rose-400 flex items-center gap-1 transition-colors"
               title="Clear all saved components"
             >
               <Trash2 className="w-3 h-3" />
-              <span className="hidden sm:inline">Clear All</span>
+              <span>Clear Library</span>
             </button>
-          </div>
+          )}
         </div>
 
         {/* Visual Cards Grid */}
@@ -201,7 +184,7 @@ function VaultMain() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-6">
             {filteredResources.map((item, idx) => (
               <div key={item.id} className="relative group">
-                {/* Subtle ranking number behind card matching screenshot */}
+                {/* Ranking index watermark behind card */}
                 <span className="absolute -top-6 -left-3 text-5xl font-black text-white/[0.04] select-none pointer-events-none group-hover:text-white/[0.08] transition-colors font-mono">
                   {idx + 1}
                 </span>
@@ -219,14 +202,14 @@ function VaultMain() {
           /* Empty State */
           <div className="flex flex-col items-center justify-center p-16 text-center rounded-2xl bg-[#111114] border border-dashed border-[#202024] max-w-md mx-auto mt-12">
             <div className="w-12 h-12 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mb-3.5">
-              <Plus className="w-6 h-6" />
+              <FolderOpen className="w-6 h-6" />
             </div>
             <h3 className="text-base font-semibold text-white mb-1">
-              {searchQuery ? 'No matching components' : 'No components saved yet'}
+              {searchQuery ? 'No matching components' : 'Your library is empty'}
             </h3>
             <p className="text-xs text-zinc-400 max-w-xs mb-6">
               {searchQuery
-                ? `No components matched "${searchQuery}". Try a different keyword.`
+                ? `No components matched "${searchQuery}". Try another keyword.`
                 : 'Click "Add Component" to paste a prompt, upload a screenshot, or save a website reference.'}
             </p>
             {searchQuery ? (

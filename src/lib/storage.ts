@@ -1,10 +1,9 @@
 import { Resource } from '../types/resource';
-import { INITIAL_RESOURCES } from '../data/demo-resources';
 import { imageDB } from './image-db';
 
 const STORAGE_KEYS = {
-  RESOURCES: 'vault_resources_minimal_v1',
-  INITIALIZED: 'vault_initialized_v1',
+  RESOURCES: 'vault_components_v3',
+  LEGACY_KEY: 'vault_resources_minimal_v1',
 };
 
 export function extractDomain(url?: string): string {
@@ -18,36 +17,38 @@ export function extractDomain(url?: string): string {
 }
 
 export function generateTitleFromPrompt(prompt?: string): string {
-  if (!prompt || !prompt.trim()) return 'Untitled Resource';
+  if (!prompt || !prompt.trim()) return 'Untitled Component';
   const firstLine = prompt.trim().split('\n')[0].trim();
-  // Strip common markdown headers or prefixes
   const clean = firstLine.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim();
   if (clean.length > 55) {
     return clean.slice(0, 52) + '...';
   }
-  return clean || 'Untitled Prompt';
+  return clean || 'Untitled Component';
 }
 
 export const storage = {
   getResources(): Resource[] {
     try {
-      const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
       const raw = localStorage.getItem(STORAGE_KEYS.RESOURCES);
-
-      if (!isInitialized) {
-        // First run: seed initial demo resources
-        localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
-        localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(INITIAL_RESOURCES));
-        return INITIAL_RESOURCES;
+      if (raw) {
+        const parsed: Resource[] = JSON.parse(raw);
+        // Exclude any legacy dummy items
+        return parsed.filter((item) => !item.id.startsWith('res-'));
       }
 
-      if (!raw) {
-        return [];
+      // Check if user already added items in previous key (without legacy demo items)
+      const legacyRaw = localStorage.getItem(STORAGE_KEYS.LEGACY_KEY);
+      if (legacyRaw) {
+        const legacyParsed: Resource[] = JSON.parse(legacyRaw);
+        // Keep ONLY user-created items (which start with 'res_') and discard 'res-1'...'res-8'
+        const userItems = legacyParsed.filter((item) => !item.id.startsWith('res-'));
+        localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(userItems));
+        return userItems;
       }
 
-      return JSON.parse(raw);
+      return [];
     } catch (err) {
-      console.error('Failed to read resources from storage:', err);
+      console.error('Failed to read components from storage:', err);
       return [];
     }
   },
@@ -63,7 +64,7 @@ export const storage = {
         ? generateTitleFromPrompt(resource.promptText)
         : resource.sourceUrl
         ? extractDomain(resource.sourceUrl)
-        : 'Untitled Resource';
+        : 'Untitled Component';
 
     const sourceWebsiteName =
       resource.sourceWebsiteName ||
@@ -88,7 +89,7 @@ export const storage = {
           id: resource.id,
           title,
           description: resource.description || '',
-          type: resource.type || 'component',
+          type: 'component',
           sourceUrl: resource.sourceUrl || '',
           sourceWebsiteName,
           promptText: resource.promptText || '',
@@ -99,12 +100,12 @@ export const storage = {
         resources.unshift(savedItem);
       }
     } else {
-      const id = `res_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const id = `comp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       savedItem = {
         id,
         title,
         description: resource.description || '',
-        type: resource.type || 'component',
+        type: 'component',
         sourceUrl: resource.sourceUrl || '',
         sourceWebsiteName,
         promptText: resource.promptText || '',
@@ -125,20 +126,14 @@ export const storage = {
     const updated = resources.filter((r) => r.id !== id);
     localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(updated));
 
-    // If resource has an IndexedDB image, clean it up
     if (target?.previewImageUrl?.startsWith('idb:')) {
       imageDB.deleteImage(target.previewImageUrl);
     }
   },
 
   clearLibrary(): void {
-    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify([]));
+    localStorage.removeItem(STORAGE_KEYS.LEGACY_KEY);
     imageDB.clearAll();
-  },
-
-  resetDemoData(): void {
-    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
-    localStorage.setItem(STORAGE_KEYS.RESOURCES, JSON.stringify(INITIAL_RESOURCES));
   },
 };
