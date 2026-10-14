@@ -4,13 +4,10 @@ import {
   Upload,
   Link as LinkIcon,
   Terminal,
-  Layers,
-  Globe,
-  Folder,
   Image as ImageIcon,
   Check,
 } from 'lucide-react';
-import { Resource, ResourceType } from '../../types/resource';
+import { Resource } from '../../types/resource';
 import { imageDB } from '../../lib/image-db';
 import { useToast } from '../layout/Toast';
 
@@ -20,13 +17,6 @@ interface AddResourceModalProps {
   onSave: (resource: Partial<Resource> & { id?: string }) => void;
   initialData?: Resource | null; // For editing
 }
-
-const TYPES: { type: ResourceType; label: string; icon: any }[] = [
-  { type: 'component', label: 'Component', icon: Layers },
-  { type: 'prompt', label: 'Prompt', icon: Terminal },
-  { type: 'website', label: 'Website', icon: Globe },
-  { type: 'other', label: 'Other', icon: Folder },
-];
 
 export const AddResourceModal: React.FC<AddResourceModalProps> = ({
   isOpen,
@@ -41,7 +31,6 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
   const [sourceUrl, setSourceUrl] = useState('');
   const [promptText, setPromptText] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState<ResourceType>('component');
 
   // Image handling
   const [imageMode, setImageMode] = useState<'upload' | 'url'>('upload');
@@ -57,7 +46,6 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
       setSourceUrl(initialData.sourceUrl || '');
       setPromptText(initialData.promptText || '');
       setDescription(initialData.description || '');
-      setType(initialData.type || 'component');
 
       if (initialData.previewImageUrl) {
         if (initialData.previewImageUrl.startsWith('idb:')) {
@@ -85,7 +73,6 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
     setSourceUrl('');
     setPromptText('');
     setDescription('');
-    setType('component');
     setImageMode('upload');
     setImageUrl('');
     setPreviewDataUrl(null);
@@ -93,7 +80,7 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
     setIsSaving(false);
   };
 
-  // Support pasting image from clipboard directly in modal
+  // Support pasting screenshot from clipboard directly
   useEffect(() => {
     if (!isOpen) return;
 
@@ -138,7 +125,7 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
 
   const handleImageFileSelected = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      toast('Please select a valid image file', 'error');
+      toast('Please select an image file', 'error');
       return;
     }
 
@@ -183,16 +170,16 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
         sourceUrl: sourceUrl.trim(),
         promptText: promptText,
         description: description.trim(),
-        type,
+        type: 'component',
         previewImageUrl: finalImageUrl,
       };
 
       onSave(resourcePayload);
-      toast(initialData ? 'Resource updated!' : 'Saved to library!', 'success');
+      toast(initialData ? 'Component updated!' : 'Component saved to library!', 'success');
       onClose();
     } catch (err) {
-      console.error('Error saving resource:', err);
-      toast('Failed to save resource', 'error');
+      console.error('Error saving component:', err);
+      toast('Failed to save component', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -201,25 +188,25 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-xl bg-[#121215] border border-[#26262B] rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-scale-up"
+        className="w-full max-w-xl bg-[#111114] border border-[#222226] rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#222226]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1E1E22]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 rounded-lg bg-[#1853DB]/20 border border-[#1853DB]/40 flex items-center justify-center text-blue-400">
               <ImageIcon className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-base font-semibold text-white">
-                {initialData ? 'Edit Resource' : 'Add to Library'}
+                {initialData ? 'Edit Component' : 'Add Component'}
               </h2>
               <p className="text-xs text-zinc-400">
                 {initialData
-                  ? 'Update your saved resource details'
-                  : 'Quickly save a prompt, visual bookmark, or component reference'}
+                  ? 'Update component details and prompt'
+                  : 'Save screenshot, prompt, and source URL in your local library'}
               </p>
             </div>
           </div>
@@ -233,93 +220,10 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
 
         {/* Modal Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
-          {/* Resource Type Selector */}
-          <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Type</label>
-            <div className="grid grid-cols-4 gap-2">
-              {TYPES.map((t) => {
-                const Icon = t.icon;
-                const isSelected = type === t.type;
-                return (
-                  <button
-                    key={t.type}
-                    type="button"
-                    onClick={() => setType(t.type)}
-                    className={`flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg border text-xs font-medium transition-all ${
-                      isSelected
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm shadow-blue-500/25'
-                        : 'bg-[#18181D] border-[#26262B] text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span>{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Prompt field (prominent for quick-paste workflow) */}
+          {/* Screenshot / Image Upload */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
-                <Terminal className="w-3.5 h-3.5 text-amber-400" />
-                <span>Prompt</span>
-                <span className="text-[11px] text-zinc-500 font-normal">(Optional or paste whole prompt)</span>
-              </label>
-              <span className="text-[10px] text-zinc-500 font-mono">Press Ctrl+Enter to save</span>
-            </div>
-            <textarea
-              rows={4}
-              value={promptText}
-              onChange={(e) => {
-                setPromptText(e.target.value);
-                // If type is component and user pasted something long, auto-suggest prompt type if no title set yet
-                if (!title && e.target.value.trim().length > 40 && type === 'component') {
-                  setType('prompt');
-                }
-              }}
-              placeholder="Paste entire prompt or code instruction here... line breaks and spacing are preserved."
-              className="w-full bg-[#18181D] border border-[#26262B] rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 font-mono placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-y leading-relaxed"
-            />
-          </div>
-
-          {/* Title field (optional) */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-zinc-300">Title</label>
-              <span className="text-[11px] text-zinc-500">Auto-generated from content if blank</span>
-            </div>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Glowing Bento Grid or System Architect Prompt"
-              className="w-full bg-[#18181D] border border-[#26262B] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-            />
-          </div>
-
-          {/* Source URL field */}
-          <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Source URL</label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
-                <LinkIcon className="w-3.5 h-3.5" />
-              </div>
-              <input
-                type="url"
-                value={sourceUrl}
-                onChange={(e) => setSourceUrl(e.target.value)}
-                placeholder="https://21st.dev/... or https://github.com/..."
-                className="w-full bg-[#18181D] border border-[#26262B] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Image Upload / URL */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-medium text-zinc-300">Image Preview</label>
+              <label className="text-xs font-medium text-zinc-300">Screenshot / Image</label>
               <div className="flex items-center gap-2 text-xs">
                 <button
                   type="button"
@@ -344,17 +248,17 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
             </div>
 
             {previewDataUrl ? (
-              <div className="relative rounded-xl border border-[#26262B] bg-[#18181D] p-2 flex items-center gap-3">
+              <div className="relative rounded-xl border border-[#222226] bg-[#16161A] p-2.5 flex items-center gap-3">
                 <img
                   src={previewDataUrl}
                   alt="Preview"
                   className="w-16 h-14 object-cover rounded-lg border border-zinc-700/50 shrink-0"
                 />
                 <div className="min-w-0 flex-1 text-xs">
-                  <p className="text-zinc-300 font-medium truncate">
-                    {imageFile ? imageFile.name : 'Image preview loaded'}
+                  <p className="text-zinc-200 font-medium truncate">
+                    {imageFile ? imageFile.name : 'Screenshot preview loaded'}
                   </p>
-                  <p className="text-[10px] text-zinc-500">Persisted locally via IndexedDB</p>
+                  <p className="text-[10px] text-zinc-500">Stored persistently in private local database</p>
                 </div>
                 <button
                   type="button"
@@ -368,16 +272,16 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
             ) : imageMode === 'upload' ? (
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border border-dashed border-[#2d2d34] hover:border-blue-500/50 bg-[#16161A] hover:bg-[#18181D] rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 group"
+                className="border border-dashed border-[#28282F] hover:border-blue-500/50 bg-[#141417] hover:bg-[#18181D] rounded-xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
               >
-                <div className="p-2 rounded-lg bg-zinc-800/80 group-hover:bg-blue-600/20 text-zinc-400 group-hover:text-blue-400 transition-colors">
-                  <Upload className="w-4 h-4" />
+                <div className="p-2.5 rounded-xl bg-zinc-800/80 group-hover:bg-[#1853DB]/20 text-zinc-400 group-hover:text-blue-400 transition-colors">
+                  <Upload className="w-5 h-5" />
                 </div>
-                <div className="text-xs text-zinc-300 font-medium">
+                <div className="text-xs text-zinc-200 font-medium">
                   Click to upload screenshot or drag image here
                 </div>
-                <div className="text-[10px] text-zinc-500">
-                  Tip: You can also press <kbd className="px-1 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">Ctrl+V</kbd> to paste a screenshot directly
+                <div className="text-[11px] text-zinc-500">
+                  Tip: You can also press <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Ctrl+V</kbd> to paste a screenshot directly
                 </div>
                 <input
                   ref={fileInputRef}
@@ -398,10 +302,61 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
                   setImageUrl(e.target.value);
                   setPreviewDataUrl(e.target.value);
                 }}
-                placeholder="https://images.unsplash.com/... or any image link"
-                className="w-full bg-[#18181D] border border-[#26262B] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                placeholder="https://images.unsplash.com/... or any image URL"
+                className="w-full bg-[#16161A] border border-[#222226] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#1853DB] transition-colors"
               />
             )}
+          </div>
+
+          {/* Title field (optional) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-zinc-300">Title</label>
+              <span className="text-[11px] text-zinc-500">Auto-generated if left empty</span>
+            </div>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Halden Typography or Liquid Glass Button"
+              className="w-full bg-[#16161A] border border-[#222226] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#1853DB] transition-colors"
+            />
+          </div>
+
+          {/* Prompt field */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
+                <Terminal className="w-3.5 h-3.5 text-amber-400" />
+                <span>Prompt / Code</span>
+                <span className="text-[11px] text-zinc-500 font-normal">(Optional)</span>
+              </label>
+              <span className="text-[10px] text-zinc-500 font-mono">Press Ctrl+Enter to save</span>
+            </div>
+            <textarea
+              rows={4}
+              value={promptText}
+              onChange={(e) => setPromptText(e.target.value)}
+              placeholder="Paste complete prompt or code instructions here... formatting and line breaks are preserved."
+              className="w-full bg-[#16161A] border border-[#222226] rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 font-mono placeholder:text-zinc-600 focus:outline-none focus:border-[#1853DB] transition-colors resize-y leading-relaxed"
+            />
+          </div>
+
+          {/* Source URL field */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-300 mb-1.5">Source URL</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500">
+                <LinkIcon className="w-3.5 h-3.5" />
+              </div>
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="https://21st.dev/... or https://github.com/..."
+                className="w-full bg-[#16161A] border border-[#222226] rounded-xl pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#1853DB] transition-colors"
+              />
+            </div>
           </div>
 
           {/* Description field (optional) */}
@@ -413,22 +368,22 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Short note or context about this resource..."
-              className="w-full bg-[#18181D] border border-[#26262B] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+              placeholder="Short note about animation, tags, or usage context..."
+              className="w-full bg-[#16161A] border border-[#222226] rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#1853DB] transition-colors"
             />
           </div>
         </form>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#222226] bg-[#101012]">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[#1E1E22] bg-[#0E0E11]">
           <div className="text-[11px] text-zinc-500 hidden sm:block">
-            Quick-paste workflow: Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono">Ctrl+Enter</kbd> to save
+            Press <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px]">Ctrl+Enter</kbd> to save
           </div>
           <div className="flex items-center gap-2.5 ml-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
             >
               Cancel
             </button>
@@ -436,10 +391,10 @@ export const AddResourceModal: React.FC<AddResourceModalProps> = ({
               type="button"
               onClick={() => handleSubmit()}
               disabled={isSaving}
-              className="px-5 py-2 rounded-xl text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white shadow-sm shadow-blue-500/30 transition-all flex items-center gap-1.5"
+              className="px-5 py-2 rounded-xl text-xs font-semibold bg-[#1853DB] hover:bg-[#1D5BF0] disabled:opacity-50 text-white shadow-sm shadow-blue-500/30 transition-all flex items-center gap-1.5"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>{initialData ? 'Update Resource' : 'Save to Library'}</span>
+              <span>{initialData ? 'Update Component' : 'Save Component'}</span>
             </button>
           </div>
         </div>
